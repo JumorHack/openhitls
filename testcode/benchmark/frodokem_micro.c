@@ -63,9 +63,9 @@ static void SampleC_Ref(uint16_t *samples, size_t n,
 }
 #endif
 
-/* ---- Tunables ---- */
-#define ITERS  10000
-#define WARMUP 100
+/* ---- Tunables (overridable via CLI: ./frodokem_micro <iters> [warmup]) ---- */
+static int ITERS  = 10000;
+static int WARMUP = 100;
 
 /* ---- Cycle counter via perf_event_open ---- */
 static int g_cycles_fd = -1;
@@ -251,9 +251,14 @@ static void print_row(const char *name, BenchResult as, BenchResult sa, BenchRes
            (unsigned long)sm.med_cycles, sm.mean_cycles);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     srand(0xC0FFEE);
+
+    if (argc >= 2) ITERS  = atoi(argv[1]);
+    if (argc >= 3) WARMUP = atoi(argv[2]);
+    if (ITERS <= 0)  ITERS  = 10000;
+    if (WARMUP < 0)  WARMUP = 100;
 
 #if defined(HITLS_CRYPTO_FRODOKEM_ARMV8)
     printf("Build: NEON optimised  (HITLS_CRYPTO_FRODOKEM_ARMV8=1)\n");
