@@ -96,6 +96,16 @@ static int32_t AESCtrEncrypt(void *ctx, EAL_CipherMethod *method, const int32_t 
 void MultAsPlusEAES(uint16_t *out, const uint16_t *matrixST, const int32_t n, const int32_t nBar, uint16_t *rows,
                     int32_t rowNumber);
 
+/* Ablation variant: same outer-product but with naive (round-robin) MLA
+ * scheduling.  Selected at compile time via -DFRODO_NAIVE_SCHEDULE.
+ * See §4.3 of the TCHES paper. */
+void MultAsPlusEAES_naive(uint16_t *out, const uint16_t *matrixST, const int32_t n, const int32_t nBar, uint16_t *rows,
+                          int32_t rowNumber);
+
+#ifdef FRODO_NAIVE_SCHEDULE
+#define MultAsPlusEAES MultAsPlusEAES_naive
+#endif
+
 void MultSaPlusEAES(uint16_t *out, const uint16_t *matrixS, const int32_t n, const int32_t nBar, uint16_t *rows,
                     int32_t rowNumber);
 #else

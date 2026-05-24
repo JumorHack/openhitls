@@ -22,7 +22,9 @@
 #include "bsl_errno.h"
 #include "crypt_errno.h"
 #include "bsl_err_internal.h"
-#if defined(HITLS_CRYPTO_FRODOKEM_ARMV8)
+/* DISABLE_NEON_SAMPLE: force the scalar C sampler even when NEON is enabled.
+ * Used by the ablation study (§4.1 contribution isolated from matrix kernels). */
+#if defined(HITLS_CRYPTO_FRODOKEM_ARMV8) && !defined(DISABLE_NEON_SAMPLE)
 void FrodoCommonSampleNFromR(uint16_t *samples, const size_t n, const uint16_t *cdfTable, const size_t cdfLen,
                              const uint8_t *rBytes);
 #else

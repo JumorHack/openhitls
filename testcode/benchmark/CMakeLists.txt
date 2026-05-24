@@ -95,7 +95,8 @@ if(HITLS_CRYPTO_FRODOKEM)
         ${PROJECT_SOURCE_DIR}/crypto/include
         ${PROJECT_SOURCE_DIR}/crypto/frodokem/src
         ${PROJECT_SOURCE_DIR}/config/macro_config)
-    target_link_libraries(frodokem_micro PRIVATE ${_benchmark_link_libs})
+    # sqrtl() lives in libm
+    target_link_libraries(frodokem_micro PRIVATE ${_benchmark_link_libs} m)
     if(HITLS_CRYPTO_FRODOKEM_ARMV8)
         target_compile_definitions(frodokem_micro PRIVATE HITLS_CRYPTO_FRODOKEM_ARMV8=1)
     endif()

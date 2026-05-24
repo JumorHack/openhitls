@@ -31,6 +31,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <errno.h>
+#include <math.h>
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
 #include <linux/perf_event.h>
@@ -131,6 +132,31 @@ static double mean(const uint64_t *arr, size_t n)
     return (double)(s / (long double)n);
 }
 
+static double stddev(const uint64_t *arr, size_t n, double mu)
+{
+    if (n < 2) return 0.0;
+    long double sq = 0;
+    for (size_t i = 0; i < n; i++) {
+        long double d = (long double)arr[i] - (long double)mu;
+        sq += d * d;
+    }
+    /* sample stddev (Bessel's correction) */
+    return (double)sqrtl(sq / (long double)(n - 1));
+}
+
+static uint64_t arrmin(const uint64_t *arr, size_t n)
+{
+    uint64_t m = arr[0];
+    for (size_t i = 1; i < n; i++) if (arr[i] < m) m = arr[i];
+    return m;
+}
+static uint64_t arrmax(const uint64_t *arr, size_t n)
+{
+    uint64_t m = arr[0];
+    for (size_t i = 1; i < n; i++) if (arr[i] > m) m = arr[i];
+    return m;
+}
+
 static void rand_fill(uint8_t *p, size_t n)
 {
     for (size_t i = 0; i < n; i++) {
@@ -144,7 +170,10 @@ static void rand_fill(uint8_t *p, size_t n)
 
 typedef struct {
     uint64_t med_cycles, med_ns;
+    uint64_t min_cycles, max_cycles;
+    uint64_t min_ns,     max_ns;
     double   mean_cycles, mean_ns;
+    double   sd_cycles,   sd_ns;
 } BenchResult;
 
 #define MEASURE(stmt, out)                                                  \
@@ -161,10 +190,17 @@ typedef struct {
             cyc[_i] = c1 - c0;                                              \
             nss[_i] = t1 - t0;                                              \
         }                                                                   \
-        (out).med_cycles  = median(cyc, ITERS);                             \
-        (out).med_ns      = median(nss, ITERS);                             \
         (out).mean_cycles = mean(cyc, ITERS);                               \
         (out).mean_ns     = mean(nss, ITERS);                               \
+        (out).sd_cycles   = stddev(cyc, ITERS, (out).mean_cycles);          \
+        (out).sd_ns       = stddev(nss, ITERS, (out).mean_ns);              \
+        (out).min_cycles  = arrmin(cyc, ITERS);                             \
+        (out).max_cycles  = arrmax(cyc, ITERS);                             \
+        (out).min_ns      = arrmin(nss, ITERS);                             \
+        (out).max_ns      = arrmax(nss, ITERS);                             \
+        /* median() sorts in place, so run last */                          \
+        (out).med_cycles  = median(cyc, ITERS);                             \
+        (out).med_ns      = median(nss, ITERS);                             \
         free(cyc); free(nss);                                               \
     } while (0)
 
@@ -251,6 +287,64 @@ static void print_row(const char *name, BenchResult as, BenchResult sa, BenchRes
            (unsigned long)sm.med_cycles, sm.mean_cycles);
 }
 
+static void print_stats_block(const char *title, const char *paraName, BenchResult r)
+{
+    /* CV% = relative stddev = sd / mean × 100, a single-number measure
+     * of how stable the measurement is.  <1% is considered very stable. */
+    double cv = (r.mean_cycles > 0.0) ? (100.0 * r.sd_cycles / r.mean_cycles) : 0.0;
+    printf("  %-12s  %-18s  median=%-12lu  mean=%-12.0f  stddev=%-10.0f  cv%%=%-6.2f  "
+           "min=%-12lu  max=%-12lu\n",
+           title, paraName,
+           (unsigned long)r.med_cycles, r.mean_cycles, r.sd_cycles, cv,
+           (unsigned long)r.min_cycles, (unsigned long)r.max_cycles);
+}
+
+/* Quick environment dump: CPU model, current freq, governor, cache.
+ * No external tools, just /proc and /sys reads. */
+static void print_env(void)
+{
+    printf("===== Environment =====\n");
+
+    /* CPU model */
+    FILE *fp = fopen("/proc/cpuinfo", "r");
+    if (fp) {
+        char line[512];
+        int seen_model = 0, seen_features = 0;
+        while (fgets(line, sizeof(line), fp)) {
+            if (!seen_model && strncmp(line, "CPU implementer", 15) == 0) {
+                fputs(line, stdout); seen_model = 1;
+            }
+            if (!seen_features && strncmp(line, "Features", 8) == 0) {
+                fputs(line, stdout); seen_features = 1;
+            }
+            if (seen_model && seen_features) break;
+        }
+        fclose(fp);
+    }
+
+    /* CPU frequency (kHz) */
+    fp = fopen("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "r");
+    if (fp) {
+        unsigned long khz = 0;
+        if (fscanf(fp, "%lu", &khz) == 1)
+            printf("cpu0 freq      : %lu kHz (%.3f GHz)\n", khz, khz / 1000000.0);
+        fclose(fp);
+    } else {
+        printf("cpu0 freq      : (scaling_cur_freq unavailable)\n");
+    }
+
+    /* Governor */
+    fp = fopen("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "r");
+    if (fp) {
+        char gov[64] = {0};
+        if (fgets(gov, sizeof(gov), fp))
+            printf("cpu0 governor  : %s", gov);
+        fclose(fp);
+    }
+
+    printf("=========================\n\n");
+}
+
 int main(int argc, char **argv)
 {
     srand(0xC0FFEE);
@@ -266,6 +360,8 @@ int main(int argc, char **argv)
     printf("Build: C reference     (HITLS_CRYPTO_FRODOKEM_ARMV8=0)\n");
 #endif
     printf("Iterations: warmup=%d  measured=%d\n\n", WARMUP, ITERS);
+
+    print_env();
 
     g_cycles_fd = open_cycles_counter();
     if (g_cycles_fd < 0) {
@@ -312,8 +408,18 @@ int main(int argc, char **argv)
                (unsigned long)sm_r[i].med_ns);
     }
 
+    /* Full per-call statistics (median / mean / stddev / cv% / min / max).
+     * Useful for the paper's stability discussion. */
+    printf("\n=== Per-call cycle statistics (full) ===\n");
+    for (size_t i = 0; i < NPARA; i++) {
+        print_stats_block("AS+E",         g_paraNames[i], as_r[i]);
+        print_stats_block("S'A+E'",       g_paraNames[i], sa_r[i]);
+        print_stats_block("SampleNFromR", g_paraNames[i], sm_r[i]);
+        printf("\n");
+    }
+
     if (g_cycles_fd >= 0)
         close(g_cycles_fd);
-    printf("\nDone.\n");
+    printf("Done.\n");
     return 0;
 }

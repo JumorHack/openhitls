@@ -461,5 +461,74 @@ AARCH64_AUTIASP
     ret
 CRYPT_AARCH64_FUNC_END(MulSaPlusESHAKE)
 
+// =====================================================================
+// MultAsPlusEAES_naive — Ablation companion for MultAsPlusEAES.
+//
+// Same outer-product strategy and same memory layout as MultAsPlusEAES,
+// but the 16 MLAs are issued in row-major (round-robin) order: each of
+// the 4 accumulator registers v0..v3 is written four times BACK-TO-BACK
+// before moving on to the next accumulator.  Each back-to-back pair has
+// a 3-cycle MLA write-after-write hazard on Neoverse V1, so this version
+// is the "no diagonal scheduling" baseline used in §4.3 of the paper.
+//
+// The Latin-square ordering in MultAsPlusEAES separates same-accumulator
+// writes by 4 instructions, fully hiding the latency.  Subtracting the
+// cycle counts of the two variants isolates the contribution of the
+// diagonal MLA schedule.
+// =====================================================================
+CRYPT_AARCH64_FUNC_START(MultAsPlusEAES_naive)
+AARCH64_PACIASP
+    FRODO_SAVE_D8_D15
+
+    lsl     x9,  x2,  #1              // x9  = n * 2 bytes
+    add     x0,  x0,  x5, lsl #4     // out = &out[rowNumber][0]
+    add     x5,  x4,  x9             // row1 = rows + n*2
+    add     x6,  x5,  x9             // row2
+    add     x7,  x6,  x9             // row3
+    add     x10, x4,  x9             // end  = rows + n*2
+
+    ld1     {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]   // load B[rowNumber..+3][0..7]
+
+.LoopAsEAES_naive:
+    // Same loads as the optimised version.
+    ld1     {v4.8h, v5.8h, v6.8h, v7.8h}, [x1], #64
+
+    ldr     d8,  [x4], #8            // A[row0][k..k+3]
+    ldr     d9,  [x5], #8            // A[row1][k..k+3]
+    ldr     d10, [x6], #8            // A[row2][k..k+3]
+    ldr     d11, [x7], #8            // A[row3][k..k+3]
+
+    // NAIVE schedule: each accumulator written 4 times consecutively.
+    // Output row 0: v0 += S[k0..k3] * A[row0][k0..k3]
+    mla     v0.8h, v4.8h, v8.h[0]
+    mla     v0.8h, v5.8h, v8.h[1]
+    mla     v0.8h, v6.8h, v8.h[2]
+    mla     v0.8h, v7.8h, v8.h[3]
+    // Output row 1
+    mla     v1.8h, v4.8h, v9.h[0]
+    mla     v1.8h, v5.8h, v9.h[1]
+    mla     v1.8h, v6.8h, v9.h[2]
+    mla     v1.8h, v7.8h, v9.h[3]
+    // Output row 2
+    mla     v2.8h, v4.8h, v10.h[0]
+    mla     v2.8h, v5.8h, v10.h[1]
+    mla     v2.8h, v6.8h, v10.h[2]
+    mla     v2.8h, v7.8h, v10.h[3]
+    // Output row 3
+    mla     v3.8h, v4.8h, v11.h[0]
+    mla     v3.8h, v5.8h, v11.h[1]
+    mla     v3.8h, v6.8h, v11.h[2]
+    mla     v3.8h, v7.8h, v11.h[3]
+
+    cmp     x4, x10
+    b.mi    .LoopAsEAES_naive
+
+    st1     {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]
+
+    FRODO_RESTORE_D8_D15
+AARCH64_AUTIASP
+    ret
+CRYPT_AARCH64_FUNC_END(MultAsPlusEAES_naive)
+
 #endif
 
