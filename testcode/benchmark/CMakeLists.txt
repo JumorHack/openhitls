@@ -100,4 +100,12 @@ if(HITLS_CRYPTO_FRODOKEM)
     if(HITLS_CRYPTO_FRODOKEM_ARMV8)
         target_compile_definitions(frodokem_micro PRIVATE HITLS_CRYPTO_FRODOKEM_ARMV8=1)
     endif()
+    # Mirror the FrodoKEM library's ablation switches into the micro binary so
+    # the "Schedule:" / "Sampler:" diagnostic prints reflect reality.
+    if(FRODO_NAIVE_SCHEDULE)
+        target_compile_definitions(frodokem_micro PRIVATE FRODO_NAIVE_SCHEDULE=1)
+    endif()
+    if(DISABLE_NEON_SAMPLE)
+        target_compile_definitions(frodokem_micro PRIVATE DISABLE_NEON_SAMPLE=1)
+    endif()
 endif()

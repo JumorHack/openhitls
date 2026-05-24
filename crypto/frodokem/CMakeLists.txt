@@ -31,6 +31,22 @@ endif()
 
 add_library(_hitls_crypto_frodokem OBJECT ${_frodokem_sources})
 
+# Ablation switches (TCHES paper §4.x).  Configure-time options that
+# propagate as compile definitions to the FrodoKEM TU exclusively, so the
+# rest of the library stays unaffected.  Driven from CMake -D flags, NOT
+# from CMAKE_C_FLAGS, to avoid ordering issues with global -D flags.
+option(FRODO_NAIVE_SCHEDULE  "Use naive round-robin MLA schedule for MultAsPlusEAES (ablation)" OFF)
+option(DISABLE_NEON_SAMPLE   "Force scalar C sampler even when NEON is on (ablation)" OFF)
+
+if(FRODO_NAIVE_SCHEDULE)
+    target_compile_definitions(_hitls_crypto_frodokem PRIVATE FRODO_NAIVE_SCHEDULE)
+    message(STATUS "FrodoKEM ablation: NAIVE schedule selected (MultAsPlusEAES_naive)")
+endif()
+if(DISABLE_NEON_SAMPLE)
+    target_compile_definitions(_hitls_crypto_frodokem PRIVATE DISABLE_NEON_SAMPLE)
+    message(STATUS "FrodoKEM ablation: scalar sampler selected (DISABLE_NEON_SAMPLE)")
+endif()
+
 target_link_libraries(_hitls_crypto_frodokem
     PUBLIC
         _hitls_crypto_common_include

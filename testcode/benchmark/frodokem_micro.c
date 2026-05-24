@@ -40,7 +40,10 @@
 #include "crypt_errno.h"
 #include "frodo_local.h"
 
-#if defined(HITLS_CRYPTO_FRODOKEM_ARMV8)
+/* The micro benchmark calls the sampler directly — it does NOT go through
+ * frodokem_pke.c's dispatch.  So DISABLE_NEON_SAMPLE must be checked HERE,
+ * not in the PKE file, for the ablation study to see the scalar version. */
+#if defined(HITLS_CRYPTO_FRODOKEM_ARMV8) && !defined(DISABLE_NEON_SAMPLE)
 extern void FrodoCommonSampleNFromR(uint16_t *samples, size_t n,
                                     const uint16_t *cdfTable, size_t cdfLen,
                                     const uint8_t *rBytes);
@@ -359,6 +362,14 @@ int main(int argc, char **argv)
 #else
     printf("Build: C reference     (HITLS_CRYPTO_FRODOKEM_ARMV8=0)\n");
 #endif
+#if defined(FRODO_NAIVE_SCHEDULE)
+    printf("Schedule: NAIVE round-robin (FRODO_NAIVE_SCHEDULE=1)\n");
+#else
+    printf("Schedule: diagonal MLA (Latin-square)\n");
+#endif
+    printf("Sampler : %s\n",
+           HAS_NEON_SAMPLER ? "NEON FrodoCommonSampleNFromR (asm)"
+                            : "scalar SampleC_Ref (DISABLE_NEON_SAMPLE or no NEON)");
     printf("Iterations: warmup=%d  measured=%d\n\n", WARMUP, ITERS);
 
     print_env();
