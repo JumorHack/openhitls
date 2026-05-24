@@ -29,11 +29,17 @@
 #include "crypt_errno.h"
 #include "frodo_local.h"
 
-/* ------------------------------------------------------------------ */
+#if defined(HITLS_CRYPTO_FRODOKEM_ARMV8)
+/* NEON build: assembly exposes the optimised symbol globally. */
+extern void FrodoCommonSampleNFromR(uint16_t *samples, size_t n,
+                                    const uint16_t *cdfTable, size_t cdfLen,
+                                    const uint8_t *rBytes);
+#define HAS_NEON_SAMPLER 1
+#else
+#define HAS_NEON_SAMPLER 0
 /* Reference C sampler — kept locally because the version in           */
 /* frodokem_pke.c is `static` and not visible to this translation unit */
 /* in the non-NEON build.                                              */
-/* ------------------------------------------------------------------ */
 static void SampleC_Ref(uint16_t *samples, size_t n,
                         const uint16_t *cdfTable, size_t cdfLen,
                         const uint8_t *rBytes)
@@ -49,15 +55,6 @@ static void SampleC_Ref(uint16_t *samples, size_t n,
         samples[i] = ((uint16_t)(-sign) ^ t) + sign;
     }
 }
-
-#if defined(HITLS_CRYPTO_FRODOKEM_ARMV8)
-/* NEON build: assembly exposes the optimised symbol globally. */
-extern void FrodoCommonSampleNFromR(uint16_t *samples, size_t n,
-                                    const uint16_t *cdfTable, size_t cdfLen,
-                                    const uint8_t *rBytes);
-#define HAS_NEON_SAMPLER 1
-#else
-#define HAS_NEON_SAMPLER 0
 #endif
 
 /* ---- Tunables ---- */
