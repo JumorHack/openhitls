@@ -80,3 +80,23 @@ target_include_directories(openhitls_benchmark PRIVATE
     ${PROJECT_SOURCE_DIR}/crypto/include
     ${PROJECT_SOURCE_DIR}/config/macro_config)
 target_link_libraries(openhitls_benchmark PRIVATE ${_benchmark_link_libs})
+
+# ------------------------------------------------------------------
+# Sub-function micro benchmark for FrodoKEM (paper Section 6 data 2).
+# Built only when FrodoKEM is enabled.
+# Links the internal (non-public) symbols from libhitls_crypto.
+# ------------------------------------------------------------------
+if(HITLS_CRYPTO_FRODOKEM)
+    add_executable(frodokem_micro frodokem_micro.c)
+    target_include_directories(frodokem_micro PRIVATE
+        ${PROJECT_SOURCE_DIR}/include/crypto
+        ${PROJECT_SOURCE_DIR}/include/bsl
+        ${PROJECT_SOURCE_DIR}/bsl/include
+        ${PROJECT_SOURCE_DIR}/crypto/include
+        ${PROJECT_SOURCE_DIR}/crypto/frodokem/src
+        ${PROJECT_SOURCE_DIR}/config/macro_config)
+    target_link_libraries(frodokem_micro PRIVATE ${_benchmark_link_libs})
+    if(HITLS_CRYPTO_FRODOKEM_ARMV8)
+        target_compile_definitions(frodokem_micro PRIVATE HITLS_CRYPTO_FRODOKEM_ARMV8=1)
+    endif()
+endif()
