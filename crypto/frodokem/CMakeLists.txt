@@ -35,12 +35,20 @@ add_library(_hitls_crypto_frodokem OBJECT ${_frodokem_sources})
 # propagate as compile definitions to the FrodoKEM TU exclusively, so the
 # rest of the library stays unaffected.  Driven from CMake -D flags, NOT
 # from CMAKE_C_FLAGS, to avoid ordering issues with global -D flags.
-option(FRODO_NAIVE_SCHEDULE  "Use naive round-robin MLA schedule for MultAsPlusEAES (ablation)" OFF)
+option(FRODO_NAIVE_SCHEDULE  "Use row-at-a-time MLA schedule for MultAsPlusEAES, config E (ablation)" OFF)
+option(FRODO_RR_SCHEDULE     "Use round-robin MLA schedule for MultAsPlusEAES, config B (ablation)" OFF)
 option(DISABLE_NEON_SAMPLE   "Force scalar C sampler even when NEON is on (ablation)" OFF)
 
+if(FRODO_NAIVE_SCHEDULE AND FRODO_RR_SCHEDULE)
+    message(FATAL_ERROR "Enable at most one of FRODO_NAIVE_SCHEDULE and FRODO_RR_SCHEDULE")
+endif()
 if(FRODO_NAIVE_SCHEDULE)
     target_compile_definitions(_hitls_crypto_frodokem PRIVATE FRODO_NAIVE_SCHEDULE)
-    message(STATUS "FrodoKEM ablation: NAIVE schedule selected (MultAsPlusEAES_naive)")
+    message(STATUS "FrodoKEM ablation: row-at-a-time schedule selected (config E, MultAsPlusEAES_naive)")
+endif()
+if(FRODO_RR_SCHEDULE)
+    target_compile_definitions(_hitls_crypto_frodokem PRIVATE FRODO_RR_SCHEDULE)
+    message(STATUS "FrodoKEM ablation: round-robin schedule selected (config B, MultAsPlusEAES_rr)")
 endif()
 if(DISABLE_NEON_SAMPLE)
     target_compile_definitions(_hitls_crypto_frodokem PRIVATE DISABLE_NEON_SAMPLE)

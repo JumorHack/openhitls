@@ -96,14 +96,24 @@ static int32_t AESCtrEncrypt(void *ctx, EAL_CipherMethod *method, const int32_t 
 void MultAsPlusEAES(uint16_t *out, const uint16_t *matrixST, const int32_t n, const int32_t nBar, uint16_t *rows,
                     int32_t rowNumber);
 
-/* Ablation variant: same outer-product but with naive (round-robin) MLA
- * scheduling.  Selected at compile time via -DFRODO_NAIVE_SCHEDULE.
- * See §4.3 of the TCHES paper. */
+/* Ablation variants for the §4.3 / §6.5 MLA-scheduling study.
+ * MultAsPlusEAES itself is the diagonal (Latin-square) schedule (config C).
+ *   _naive : ROW-AT-A-TIME schedule  (config E) -- selected by FRODO_NAIVE_SCHEDULE
+ *   _rr    : ROUND-ROBIN  schedule   (config B) -- selected by FRODO_RR_SCHEDULE
+ * Exactly one of the two macros may be defined; if neither is set the
+ * default diagonal kernel is used. */
 void MultAsPlusEAES_naive(uint16_t *out, const uint16_t *matrixST, const int32_t n, const int32_t nBar, uint16_t *rows,
                           int32_t rowNumber);
+void MultAsPlusEAES_rr(uint16_t *out, const uint16_t *matrixST, const int32_t n, const int32_t nBar, uint16_t *rows,
+                       int32_t rowNumber);
 
+#if defined(FRODO_NAIVE_SCHEDULE) && defined(FRODO_RR_SCHEDULE)
+#error "Define at most one of FRODO_NAIVE_SCHEDULE (row-at-a-time) and FRODO_RR_SCHEDULE (round-robin)"
+#endif
 #ifdef FRODO_NAIVE_SCHEDULE
 #define MultAsPlusEAES MultAsPlusEAES_naive
+#elif defined(FRODO_RR_SCHEDULE)
+#define MultAsPlusEAES MultAsPlusEAES_rr
 #endif
 
 void MultSaPlusEAES(uint16_t *out, const uint16_t *matrixS, const int32_t n, const int32_t nBar, uint16_t *rows,

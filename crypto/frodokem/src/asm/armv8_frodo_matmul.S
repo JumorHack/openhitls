@@ -462,19 +462,21 @@ AARCH64_AUTIASP
 CRYPT_AARCH64_FUNC_END(MulSaPlusESHAKE)
 
 // =====================================================================
-// MultAsPlusEAES_naive — Ablation companion for MultAsPlusEAES.
+// MultAsPlusEAES_naive — Ablation companion (ROW-AT-A-TIME schedule).
 //
 // Same outer-product strategy and same memory layout as MultAsPlusEAES,
-// but the 16 MLAs are issued in row-major (round-robin) order: each of
-// the 4 accumulator registers v0..v3 is written four times BACK-TO-BACK
-// before moving on to the next accumulator.  Each back-to-back pair has
-// a 3-cycle MLA write-after-write hazard on Neoverse V1, so this version
-// is the "no diagonal scheduling" baseline used in §4.3 of the paper.
+// but the 16 MLAs are issued ROW-AT-A-TIME: each of the 4 accumulator
+// registers v0..v3 is written four times BACK-TO-BACK before moving on
+// to the next accumulator.  This is the maximally hazardous schedule
+// (consecutive same-accumulator writes form a true RAW chain) and is
+// configuration (E) in the §4.3 / §6.5 ablation.
 //
-// The Latin-square ordering in MultAsPlusEAES separates same-accumulator
-// writes by 4 instructions, fully hiding the latency.  Subtracting the
-// cycle counts of the two variants isolates the contribution of the
-// diagonal MLA schedule.
+// NOTE: this is NOT round-robin.  Round-robin (config B), which rotates
+// the accumulator every instruction, is in MultAsPlusEAES_rr below.
+// The Latin-square ordering in MultAsPlusEAES (config C) separates
+// same-accumulator writes by 4 instructions.  Comparing all three
+// isolates the contribution of MLA scheduling on a given core; on
+// Neoverse V1 the accumulate-forwarding path makes them near-identical.
 // =====================================================================
 CRYPT_AARCH64_FUNC_START(MultAsPlusEAES_naive)
 AARCH64_PACIASP
@@ -529,6 +531,79 @@ AARCH64_PACIASP
 AARCH64_AUTIASP
     ret
 CRYPT_AARCH64_FUNC_END(MultAsPlusEAES_naive)
+
+// =====================================================================
+// MultAsPlusEAES_rr — Ablation companion (ROUND-ROBIN schedule).
+//
+// Same outer-product strategy and same memory layout as MultAsPlusEAES,
+// but the 16 MLAs rotate the accumulator every instruction in plain
+// round-robin order v0,v1,v2,v3, v0,v1,v2,v3, ...  Each accumulator is
+// therefore written at instructions 1,5,9,13 — a 3-instruction gap
+// between same-accumulator writes, identical spacing to the diagonal
+// schedule, but WITHOUT the Latin-square rotation of the source
+// (S-register, lane) pairing.  This is configuration (B) in §4.3 /
+// §6.5; comparing it against the diagonal (C) and row-at-a-time (E)
+// variants isolates the effect of source-operand pairing vs.
+// accumulator spacing.
+//
+// x0 = out (N×8), x1 = matrixS (N×8), x2 = n, x3 = nBar(unused),
+// x4 = rows (4 A rows contiguous), x5 = rowNumber
+// =====================================================================
+CRYPT_AARCH64_FUNC_START(MultAsPlusEAES_rr)
+AARCH64_PACIASP
+    FRODO_SAVE_D8_D15
+
+    lsl     x9,  x2,  #1              // x9  = n * 2 bytes
+    add     x0,  x0,  x5, lsl #4     // out = &out[rowNumber][0]
+    add     x5,  x4,  x9             // row1 = rows + n*2
+    add     x6,  x5,  x9             // row2
+    add     x7,  x6,  x9             // row3
+    add     x10, x4,  x9             // end  = rows + n*2
+
+    ld1     {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]   // load B[rowNumber..+3][0..7]
+
+.LoopAsEAES_rr:
+    // Same loads as the optimised version.
+    ld1     {v4.8h, v5.8h, v6.8h, v7.8h}, [x1], #64
+
+    ldr     d8,  [x4], #8            // A[row0][k..k+3]
+    ldr     d9,  [x5], #8            // A[row1][k..k+3]
+    ldr     d10, [x6], #8            // A[row2][k..k+3]
+    ldr     d11, [x7], #8            // A[row3][k..k+3]
+
+    // ROUND-ROBIN schedule: accumulator rotates every instruction,
+    // k advances in lockstep across the four rounds (no Latin-square
+    // source rotation).
+    // Round 1: k0 for rows 0..3
+    mla     v0.8h, v4.8h, v8.h[0]
+    mla     v1.8h, v4.8h, v9.h[0]
+    mla     v2.8h, v4.8h, v10.h[0]
+    mla     v3.8h, v4.8h, v11.h[0]
+    // Round 2: k1 for rows 0..3
+    mla     v0.8h, v5.8h, v8.h[1]
+    mla     v1.8h, v5.8h, v9.h[1]
+    mla     v2.8h, v5.8h, v10.h[1]
+    mla     v3.8h, v5.8h, v11.h[1]
+    // Round 3: k2 for rows 0..3
+    mla     v0.8h, v6.8h, v8.h[2]
+    mla     v1.8h, v6.8h, v9.h[2]
+    mla     v2.8h, v6.8h, v10.h[2]
+    mla     v3.8h, v6.8h, v11.h[2]
+    // Round 4: k3 for rows 0..3
+    mla     v0.8h, v7.8h, v8.h[3]
+    mla     v1.8h, v7.8h, v9.h[3]
+    mla     v2.8h, v7.8h, v10.h[3]
+    mla     v3.8h, v7.8h, v11.h[3]
+
+    cmp     x4, x10
+    b.mi    .LoopAsEAES_rr
+
+    st1     {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]
+
+    FRODO_RESTORE_D8_D15
+AARCH64_AUTIASP
+    ret
+CRYPT_AARCH64_FUNC_END(MultAsPlusEAES_rr)
 
 #endif
 
