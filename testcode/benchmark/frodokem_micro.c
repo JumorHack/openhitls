@@ -363,9 +363,11 @@ int main(int argc, char **argv)
     printf("Build: C reference     (HITLS_CRYPTO_FRODOKEM_ARMV8=0)\n");
 #endif
 #if defined(FRODO_NAIVE_SCHEDULE)
-    printf("Schedule: NAIVE round-robin (FRODO_NAIVE_SCHEDULE=1)\n");
+    printf("Schedule: row-at-a-time (config E, FRODO_NAIVE_SCHEDULE=1)\n");
+#elif defined(FRODO_RR_SCHEDULE)
+    printf("Schedule: round-robin (config B, FRODO_RR_SCHEDULE=1)\n");
 #else
-    printf("Schedule: diagonal MLA (Latin-square)\n");
+    printf("Schedule: diagonal MLA / Latin-square (config C, default)\n");
 #endif
     printf("Sampler : %s\n",
            HAS_NEON_SAMPLER ? "NEON FrodoCommonSampleNFromR (asm)"

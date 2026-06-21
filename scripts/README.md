@@ -12,6 +12,10 @@ bash scripts/collect_env.sh > results/environment.txt
 # Main 4-config ablation (Experiment 1).  Default 1000 / 100 iterations.
 bash scripts/run_ablation.sh
 
+# E1a: three-way MLA schedule comparison on one core (Experiment 1a).
+# Builds row-at-a-time / round-robin / diagonal and runs AS+E for each.
+bash scripts/run_e1a.sh
+
 # Compiler optimisation sweep -O0 / -O2 / -O3 (Experiment 4)
 bash scripts/run_optlevel.sh
 
@@ -48,7 +52,12 @@ ITERS_NEON=5000 ITERS_REF=200 bash scripts/run_ablation.sh
 
 | Macro | Effect |
 |-------|--------|
-| `FRODO_NAIVE_SCHEDULE` | Use `MultAsPlusEAES_naive` (round-robin schedule) instead of the Latin-square diagonal version. |
+| `FRODO_NAIVE_SCHEDULE` | Use `MultAsPlusEAES_naive` — the **row-at-a-time** schedule (config E), each accumulator written four times back-to-back. |
+| `FRODO_RR_SCHEDULE`    | Use `MultAsPlusEAES_rr` — the **round-robin** schedule (config B), accumulator rotated every instruction. |
 | `DISABLE_NEON_SAMPLE`  | Force the scalar C reference `FrodoCommonSampleNFromR` even when `HITLS_CRYPTO_FRODOKEM_ARMV8=ON`. |
 
-Both are pure compile-time switches; pass via `-DCMAKE_C_FLAGS=...`.
+The default (neither schedule macro) is the **diagonal / Latin-square**
+schedule (config C).  At most one schedule macro may be set.
+Pass them as CMake options (`-DFRODO_RR_SCHEDULE=ON`), which propagate via
+`target_compile_definitions` to both the FrodoKEM library and the
+`frodokem_micro` binary's diagnostic header.
