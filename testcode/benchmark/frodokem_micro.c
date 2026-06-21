@@ -372,6 +372,11 @@ int main(int argc, char **argv)
     printf("Sampler : %s\n",
            HAS_NEON_SAMPLER ? "NEON FrodoCommonSampleNFromR (asm)"
                             : "scalar SampleC_Ref (DISABLE_NEON_SAMPLE or no NEON)");
+#if defined(FRODO_BENCH_GEN_ONLY)
+    printf("Measure : GEN-ONLY (MAC skipped) -- AS+E/S'A+E' columns are Gen(A) time only\n");
+#else
+    printf("Measure : FULL (Gen + MAC)\n");
+#endif
     printf("Iterations: warmup=%d  measured=%d\n\n", WARMUP, ITERS);
 
     print_env();

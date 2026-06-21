@@ -38,6 +38,10 @@ add_library(_hitls_crypto_frodokem OBJECT ${_frodokem_sources})
 option(FRODO_NAIVE_SCHEDULE  "Use row-at-a-time MLA schedule for MultAsPlusEAES, config E (ablation)" OFF)
 option(FRODO_RR_SCHEDULE     "Use round-robin MLA schedule for MultAsPlusEAES, config B (ablation)" OFF)
 option(DISABLE_NEON_SAMPLE   "Force scalar C sampler even when NEON is on (ablation)" OFF)
+# BENCHMARK-ONLY (paper experiment E2): skip the multiply-accumulate in the
+# matrix routines so they time Gen(A) alone.  Produces INCORRECT KEM output;
+# never enable in a production build.  MAC time = Total - Gen.
+option(FRODO_BENCH_GEN_ONLY  "Skip MAC, measure on-the-fly A generation only (E2 decomposition)" OFF)
 
 if(FRODO_NAIVE_SCHEDULE AND FRODO_RR_SCHEDULE)
     message(FATAL_ERROR "Enable at most one of FRODO_NAIVE_SCHEDULE and FRODO_RR_SCHEDULE")
@@ -53,6 +57,10 @@ endif()
 if(DISABLE_NEON_SAMPLE)
     target_compile_definitions(_hitls_crypto_frodokem PRIVATE DISABLE_NEON_SAMPLE)
     message(STATUS "FrodoKEM ablation: scalar sampler selected (DISABLE_NEON_SAMPLE)")
+endif()
+if(FRODO_BENCH_GEN_ONLY)
+    target_compile_definitions(_hitls_crypto_frodokem PRIVATE FRODO_BENCH_GEN_ONLY)
+    message(WARNING "FrodoKEM E2: GEN-ONLY build (MAC skipped) -- benchmark only, KEM output is INVALID")
 endif()
 
 target_link_libraries(_hitls_crypto_frodokem

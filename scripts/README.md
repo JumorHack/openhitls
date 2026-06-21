@@ -16,6 +16,17 @@ bash scripts/run_ablation.sh
 # Builds row-at-a-time / round-robin / diagonal and runs AS+E for each.
 bash scripts/run_e1a.sh
 
+# E2: PRG/MAC decomposition -- separates Gen(A) from the multiply-accumulate
+# so the pure-MAC speedup (ref vs NEON) can be reported.  4 builds.
+bash scripts/run_e2.sh
+
+# E3: end-to-end KEM at -O3 (paper's main table is -O2).  ref + NEON builds.
+bash scripts/run_e3.sh
+
+# E4: same-machine comparison vs PQCrypto-LWEKE and liboqs + NEON-sampler
+# source check.  Clones two external repos under e4_ext/ (best-effort).
+bash scripts/run_e4.sh
+
 # Compiler optimisation sweep -O0 / -O2 / -O3 (Experiment 4)
 bash scripts/run_optlevel.sh
 

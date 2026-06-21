@@ -193,6 +193,9 @@ static int32_t FrodoCommonMulAddAES(uint16_t *out, const uint16_t *matrixSTransp
         BSL_ERR_PUSH_ERROR(ret);
         goto EXIT;
     }
+#ifdef FRODO_BENCH_GEN_ONLY
+    (void)multFunction; (void)out; (void)matrixSTranspose; (void)nBar;
+#endif
     const int32_t blocksPerRow = n / 8;
     InitAESHeaderBlockNumber(plaintext, blocksPerRow);
     for (int32_t rowNumber = 0; rowNumber < n; rowNumber += 4) {
@@ -201,7 +204,12 @@ static int32_t FrodoCommonMulAddAES(uint16_t *out, const uint16_t *matrixSTransp
             BSL_ERR_PUSH_ERROR(ret);
             goto EXIT;
         }
+#ifndef FRODO_BENCH_GEN_ONLY
+        /* FRODO_BENCH_GEN_ONLY is a BENCHMARK-ONLY switch (paper experiment E2):
+         * it skips the multiply-accumulate so the call measures Gen(A) alone.
+         * It produces INCORRECT KEM output and must never be set in a real build. */
         multFunction(out, matrixSTranspose, n, nBar, rows, rowNumber);
+#endif
     }
 EXIT:
     method.freeCtx(ctx);
@@ -284,6 +292,9 @@ static int32_t FrodoCommonMulAddAsPlusESHAKE(uint16_t *out, const uint16_t *matr
     uint16_t *row2 = &rows[2 * n];
     uint16_t *row3 = &rows[3 * n];
 
+#ifdef FRODO_BENCH_GEN_ONLY
+    (void)multFunction; (void)out; (void)matrixST; (void)nBar;
+#endif
     for (int32_t i = 0; i < n; i += 4) {
         U16ToBytesLE(i + 0, in0);
         U16ToBytesLE(i + 1, in1);
@@ -293,7 +304,10 @@ static int32_t FrodoCommonMulAddAsPlusESHAKE(uint16_t *out, const uint16_t *matr
         RETURN_RET_IF_ERR(FrodoKemShake128((uint8_t *)row1, n * sizeof(uint16_t), in1, inLen), ret);
         RETURN_RET_IF_ERR(FrodoKemShake128((uint8_t *)row2, n * sizeof(uint16_t), in2, inLen), ret);
         RETURN_RET_IF_ERR(FrodoKemShake128((uint8_t *)row3, n * sizeof(uint16_t), in3, inLen), ret);
+#ifndef FRODO_BENCH_GEN_ONLY
+        /* BENCHMARK-ONLY (E2): skip MAC to time Gen(A) alone.  See above. */
         multFunction(out, matrixST, n, nBar, row0, row1, row2, row3, i);
+#endif
     }
     return CRYPT_SUCCESS;
 }

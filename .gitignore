@@ -1,8 +1,12 @@
 .vscode
 output/
 build
+build_*/
 __pycache__
 */build/*
+# FrodoKEM benchmark scratch (paper experiments)
+results/
+e4_ext/
 testcode/framework/tls/lib/
 testcode/output/
 platform/*
