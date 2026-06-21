@@ -87,9 +87,20 @@ static int32_t AESCtrEncrypt(void *ctx, EAL_CipherMethod *method, const int32_t 
         BSL_ERR_PUSH_ERROR(ret);
         return ret;
     }
+    /* The AES output is a little-endian byte stream; each 16-bit coefficient
+     * is the little-endian interpretation of a byte pair.  On a little-endian
+     * host, reading rows[] as uint16_t already yields that value, so no
+     * conversion is needed.  The previous code called leToUint16() -- a
+     * bounds-checked memcpy_s per element -- for every one of the 4n elements,
+     * which dominated on-the-fly A generation (~150 cycles/AES-block).  We now
+     * byte-swap only on big-endian hosts, with cheap shifts. */
+#ifdef HITLS_BIG_ENDIAN
     for (int32_t k = 0; k < 4 * n; k++) {
-        rows[k] = (uint16_t)LE_TO_UINT16(rows[k]);
+        rows[k] = (uint16_t)((rows[k] >> 8) | (rows[k] << 8));
     }
+#else
+    (void)n;  /* n only used by the big-endian byte-swap above */
+#endif
     return CRYPT_SUCCESS;
 }
 #if defined(HITLS_CRYPTO_FRODOKEM_ARMV8)
