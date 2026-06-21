@@ -21,6 +21,7 @@
 #include "eal_cipher_local.h"
 #include "crypt_errno.h"
 #include "bsl_err_internal.h"
+#include "bsl_sal.h"
 #include <string.h>
 
 #define FRODO_MAX_N                  1344
@@ -341,12 +342,20 @@ int32_t FrodoCommonMulAddAsPlusEPortable(uint16_t *out, const uint16_t *matrixST
 #else
     const uint16_t *matS = matrixST;
 #endif
+    int32_t ret;
     if (params->prg == FRODO_PRG_AES) {
         uint8_t plaintext[FRODO_PRG_AES_PLAINTEXT_SIZE];
-        return FrodoCommonMulAddAES(out, matS, seedA, N, nBar, rows, plaintext, MultAsPlusEAES);
+        ret = FrodoCommonMulAddAES(out, matS, seedA, N, nBar, rows, plaintext, MultAsPlusEAES);
     } else {
-        return FrodoCommonMulAddAsPlusESHAKE(out, matS, seedA, params, N, nBar, rows, MulAsPlusESHAKE);
+        ret = FrodoCommonMulAddAsPlusESHAKE(out, matS, seedA, params, N, nBar, rows, MulAsPlusESHAKE);
     }
+#if defined(HITLS_CRYPTO_FRODOKEM_ARMV8)
+    /* sMatrix is a plaintext copy of secret-key material (the transposed S).
+     * Cleanse it before the stack frame is released, matching the policy
+     * openHiTLS applies to other transient secret buffers (e.g. frodokem.c). */
+    BSL_SAL_CleanseData(sMatrix, (uint32_t)sizeof(sMatrix));
+#endif
+    return ret;
 }
 
 int32_t FrodoCommonMulAddSaPlusEPortable(uint16_t *out, const uint16_t *s, const uint16_t *e, const uint8_t *seedA,
