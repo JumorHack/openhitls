@@ -9,8 +9,10 @@
  * The sampler is the kernel where constant-timeness is non-trivial: it makes a
  * data-dependent sign decision and walks the CDF table.  We test it with
  * dudect's fixed-vs-random methodology:
- *   class 0: fixed (all-zero) randomness rBytes;
- *   class 1: uniformly random rBytes.
+ *   class 0: one fixed (arbitrary, randomly chosen once) rBytes vector;
+ *   class 1: a fresh uniformly random rBytes vector each call.
+ * (A fixed *random* class avoids the degenerate all-zero input, whose all-zero
+ *  output can create a measurement artifact unrelated to the kernel timing.)
  * A constant-time implementation yields statistically indistinguishable timing
  * (Welch |t| < 4.5).  Our kernel uses only branch-free cmgt/ushr/bsl and walks
  * the whole table every call, so it should pass.
@@ -44,6 +46,7 @@ static const uint16_t *g_cdf;
 static size_t          g_cdfLen;
 static size_t          g_n;     /* samples per call (= n * nBar) */
 static uint16_t       *g_out;   /* scratch output, g_n uint16 */
+static uint8_t        *g_fixed; /* the fixed-class rBytes vector, chunk bytes */
 
 uint8_t do_one_computation(uint8_t *data)
 {
@@ -62,10 +65,10 @@ void prepare_inputs(dudect_config_t *c, uint8_t *input_data, uint8_t *classes)
     for (size_t i = 0; i < c->number_measurements; i++) {
         classes[i] = randombit();
         if (classes[i] == 0) {
-            /* fixed class: all-zero randomness */
-            memset(input_data + i * c->chunk_size, 0x00, c->chunk_size);
+            /* fixed class: one constant (randomly chosen) rBytes vector */
+            memcpy(input_data + i * c->chunk_size, g_fixed, c->chunk_size);
         }
-        /* class 1 keeps its random bytes */
+        /* class 1 keeps its fresh random bytes */
     }
 }
 
@@ -85,6 +88,13 @@ int main(void)
     }
     size_t chunk = g_n * 2;                       /* 2 randomness bytes/sample */
 
+    /* the fixed class: one arbitrary rBytes vector, chosen at random once */
+    g_fixed = malloc(chunk);
+    if (g_fixed == NULL) {
+        return 2;
+    }
+    randombytes(g_fixed, chunk);
+
     long max_batches = 2000;
     const char *env = getenv("DUDECT_BATCHES");
     if (env != NULL) {
@@ -102,8 +112,8 @@ int main(void)
            "(cdfLen=%zu), n=%zu samples/call, chunk=%zu bytes, "
            "%d meas/batch, max %ld batches\n",
            g_cdfLen, g_n, chunk, (int)config.number_measurements, max_batches);
-    printf("class 0 = fixed all-zero rBytes; class 1 = random rBytes. "
-           "Pass: |t| stays below 4.5.\n");
+    printf("class 0 = one fixed random rBytes vector; class 1 = fresh random "
+           "rBytes. Pass: |t| stays below 4.5.\n");
     fflush(stdout);
 
     dudect_state_t state = DUDECT_NO_LEAKAGE_EVIDENCE_YET;
@@ -125,5 +135,6 @@ int main(void)
 
     dudect_free(&ctx);
     free(g_out);
+    free(g_fixed);
     return (state == DUDECT_LEAKAGE_FOUND) ? 1 : 0;
 }
