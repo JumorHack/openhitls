@@ -148,4 +148,16 @@ if(HITLS_CRYPTO_FRODOKEM)
         # dudect.h needs libm (sqrt, log) and pthread is already in link libs
         target_link_libraries(frodokem_dudect PRIVATE ${_benchmark_link_libs} m)
     endif()
+
+    # ------------------------------------------------------------------
+    # Single-operation profiling driver for KeyGen/Encaps/Decaps (paper E9).
+    # ------------------------------------------------------------------
+    add_executable(frodokem_prof frodokem_prof.c)
+    target_include_directories(frodokem_prof PRIVATE
+        ${PROJECT_SOURCE_DIR}/include/crypto
+        ${PROJECT_SOURCE_DIR}/include/bsl
+        ${PROJECT_SOURCE_DIR}/bsl/include
+        ${PROJECT_SOURCE_DIR}/crypto/include
+        ${PROJECT_SOURCE_DIR}/config/macro_config)
+    target_link_libraries(frodokem_prof PRIVATE ${_benchmark_link_libs})
 endif()
