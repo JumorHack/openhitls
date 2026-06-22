@@ -26,7 +26,9 @@ NEON=(-DHITLS_CRYPTO_FRODOKEM_ASM=ON -DHITLS_CRYPTO_FRODOKEM_ARMV8=ON)
 DUDECT_H="testcode/benchmark/dudect.h"
 PIN=""; command -v taskset >/dev/null 2>&1 && PIN="taskset -c 0"
 
-# ---- fetch dudect.h (header-only) -------------------------------------------
+# ---- fetch dudect.h (header-only) + patch for aarch64 -----------------------
+# Upstream dudect.h hard-codes x86 intrinsics (<emmintrin.h>, __rdtsc); guard
+# them and use the aarch64 virtual counter (CNTVCT_EL0) for timing.
 if [ ! -f "$DUDECT_H" ]; then
     echo "===== fetching dudect.h ====="
     URL="https://raw.githubusercontent.com/oreparaz/dudect/master/src/dudect.h"
@@ -35,6 +37,20 @@ if [ ! -f "$DUDECT_H" ]; then
     else
         wget -qO "$DUDECT_H" "$URL"
     fi
+    python3 - "$DUDECT_H" <<'PY'
+import sys
+f = sys.argv[1]; s = open(f).read()
+s = s.replace("#include <emmintrin.h>\n#include <x86intrin.h>",
+ "#if defined(__x86_64__) || defined(__i386__)\n#include <emmintrin.h>\n#include <x86intrin.h>\n#endif")
+s = s.replace(
+ "static inline int64_t cpucycles(void) {\n  _mm_mfence();\n  return (int64_t)__rdtsc();\n}",
+ "static inline int64_t cpucycles(void) {\n"
+ "#if defined(__x86_64__) || defined(__i386__)\n  _mm_mfence();\n  return (int64_t)__rdtsc();\n"
+ "#elif defined(__aarch64__)\n"
+ "  int64_t v; __asm__ __volatile__(\"isb; mrs %0, cntvct_el0\" : \"=r\"(v));\n  return v;\n"
+ "#else\n  return 0;\n#endif\n}")
+open(f, 'w').write(s); print("patched dudect.h for aarch64")
+PY
 fi
 echo "dudect.h: $(wc -l < "$DUDECT_H") lines"
 
