@@ -128,4 +128,24 @@ if(HITLS_CRYPTO_FRODOKEM)
         ${PROJECT_SOURCE_DIR}/crypto/include
         ${PROJECT_SOURCE_DIR}/config/macro_config)
     target_link_libraries(frodokem_selftest PRIVATE ${_benchmark_link_libs})
+
+    # ------------------------------------------------------------------
+    # dudect constant-time test for the NEON CDF sampler (paper E8).
+    # Only built for the NEON library, and only if dudect.h is present
+    # (scripts/run_e8_dudect.sh fetches it into this directory first).
+    # ------------------------------------------------------------------
+    if(HITLS_CRYPTO_FRODOKEM_ARMV8 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/dudect.h")
+        add_executable(frodokem_dudect frodokem_dudect.c)
+        target_include_directories(frodokem_dudect PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${PROJECT_SOURCE_DIR}/include/crypto
+            ${PROJECT_SOURCE_DIR}/include/bsl
+            ${PROJECT_SOURCE_DIR}/bsl/include
+            ${PROJECT_SOURCE_DIR}/crypto/include
+            ${PROJECT_SOURCE_DIR}/crypto/frodokem/src
+            ${PROJECT_SOURCE_DIR}/config/macro_config)
+        target_compile_definitions(frodokem_dudect PRIVATE HITLS_CRYPTO_FRODOKEM_ARMV8=1)
+        # dudect.h needs libm (sqrt, log) and pthread is already in link libs
+        target_link_libraries(frodokem_dudect PRIVATE ${_benchmark_link_libs} m)
+    endif()
 endif()
