@@ -45,8 +45,8 @@ OQ=/tmp/frodo_oqs_prof
 # ---- profile each (library x operation) ----
 prof() {   # prof <tag> <bin> <op>
     local tag=$1 bin=$2 op=$3
-    $PIN perf record -F 1999 --call-graph=no \
-        -o "$OUT/perf_${tag}_${op}.data" -- "$bin" "$op" "$ITERS" >/dev/null 2>&1
+    $PIN perf record -F 1999 \
+        -o "$OUT/perf_${tag}_${op}.data" -- "$bin" "$op" "$ITERS" 2>>"$OUT/perf.log"
     {
         echo "===================================================================="
         echo "== $tag  $op   (self-time %, top functions)"
